@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jiu-Eat｜一起吃飯，一起認識新朋友</title>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="logo" href="#home">Jiu-Eat</a>
+    <button id="menu-button" class="menu-button" aria-label="開啟選單">☰</button>
+    <nav id="main-nav" class="main-nav" aria-label="主要選單">
+      <a href="#home">首頁</a>
+      <a href="#activities">探索聚會</a>
+      <a href="#member" class="member-only hidden">會員中心</a>
+      <button id="auth-button" class="button button-outline">登入／註冊</button>
+      <button id="create-button" class="button button-primary">發起聚會</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="home-page" class="page active">
+      <div class="hero">
+        <div class="hero-inner">
+          <span class="eyebrow">Jiu-Eat 聚會活動平台</span>
+          <h1>尋找有趣的靈魂，從揪食開始</h1>
+          <p>探索美食、桌遊、戶外活動和咖啡聚會，找到同樣興趣的新朋友。</p>
+          <form id="home-search-form" class="search-bar">
+            <input id="home-keyword" type="search" placeholder="搜尋美食、桌遊、戶外運動……" aria-label="搜尋活動">
+            <button type="submit">搜尋</button>
+          </form>
+          <div class="categories" id="home-categories">
+            <button class="category-chip active" data-category="">🔥 最夯聚會</button>
+            <button class="category-chip" data-category="美食饗宴">🍱 美食饗宴</button>
+            <button class="category-chip" data-category="桌遊派對">🎲 桌遊派對</button>
+            <button class="category-chip" data-category="歡唱 KTV">🎤 歡唱 KTV</button>
+            <button class="category-chip" data-category="戶外運動">⛰️ 戶外運動</button>
+            <button class="category-chip" data-category="咖啡閒聊">☕ 咖啡閒聊</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="container page-content">
+        <section class="events-section">
+          <div class="section-title"><div><span class="section-kicker">TRENDING</span><h2>熱門聚會</h2></div><a href="#activities">查看全部 →</a></div>
+          <div id="popular-grid" class="events-grid"></div>
+          <p id="home-empty" class="empty-state hidden">目前還沒有活動，登入後建立第一場聚會吧！</p>
+        </section>
+        <section class="events-section">
+          <div class="section-title"><div><span class="section-kicker">FOR YOU</span><h2>推薦給你</h2></div></div>
+          <p id="recommendation-note" class="section-note">登入後，系統會依你的興趣與地區推薦活動。</p>
+          <div id="recommendation-grid" class="events-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="activities-page" class="page container page-content">
+      <div class="page-heading"><span class="section-kicker">EXPLORE</span><h1>探索聚會</h1><p>使用關鍵字、分類或地區找到想參加的活動。</p></div>
+      <form id="filter-form" class="filter-panel">
+        <input id="filter-keyword" type="search" placeholder="搜尋活動名稱">
+        <select id="filter-category"><option value="">全部分類</option><option>美食饗宴</option><option>桌遊派對</option><option>歡唱 KTV</option><option>戶外運動</option><option>咖啡閒聊</option></select>
+        <input id="filter-city" type="text" placeholder="地區，例如：台北">
+        <button class="button button-primary" type="submit">套用篩選</button>
+      </form>
+      <div id="activities-grid" class="events-grid"></div>
+      <button id="load-more-button" class="button button-outline load-more hidden">載入更多</button>
+      <p id="activities-empty" class="empty-state hidden">找不到符合條件的活動。</p>
+    </section>
+
+    <section id="activity-detail-page" class="page container page-content">
+      <button class="text-button" data-back>← 返回活動列表</button>
+      <article id="activity-detail" class="detail-card"></article>
+    </section>
+
+    <section id="activity-form-page" class="page container page-content narrow">
+      <div class="page-heading"><span class="section-kicker">HOST</span><h1 id="activity-form-title">發起聚會</h1><p>填寫活動資訊，邀請適合的夥伴加入。</p></div>
+      <form id="activity-form" class="form-card">
+        <input id="activity-id" type="hidden">
+        <label>活動名稱<input name="title" required maxlength="200"></label>
+        <label>活動說明<textarea name="description" rows="4" placeholder="介紹活動內容與注意事項"></textarea></label>
+        <div class="form-row"><label>活動分類<select name="category" required><option value="">請選擇</option><option>美食饗宴</option><option>桌遊派對</option><option>歡唱 KTV</option><option>戶外運動</option><option>咖啡閒聊</option></select></label><label>活動城市<input name="city" required placeholder="台北市"></label></div>
+        <label>詳細地點<input name="location_name" required placeholder="店名或集合地點"></label>
+        <div class="form-row"><label>活動日期時間<input name="activity_date" type="datetime-local" required></label><label>報名截止時間<input name="deadline" type="datetime-local" required></label></div>
+        <div class="form-row"><label>人數上限<input name="max_participants" type="number" min="1" max="100" value="6" required></label><label>封面圖片網址<input name="image_url" type="url" placeholder="https://..."></label></div>
+        <div class="form-actions"><button class="button button-primary" type="submit">儲存活動</button><button class="button button-outline" type="button" data-back>取消</button></div>
+      </form>
+    </section>
+
+    <section id="member-page" class="page container page-content">
+      <div class="page-heading"><span class="section-kicker">MEMBER</span><h1>會員中心</h1><p id="member-welcome"></p></div>
+      <div class="tabs" role="tablist"><button class="tab active" data-tab="profile-panel">個人資料</button><button class="tab" data-tab="created-panel">我建立的</button><button class="tab" data-tab="applied-panel">我的申請</button></div>
+      <section id="profile-panel" class="tab-panel active">
+        <form id="profile-form" class="form-card narrow-card"><label>Email<input name="email" disabled></label><label>顯示名稱<input name="display_name" required></label><label>常用地區<input name="city" placeholder="台北"></label><label>興趣（以逗號分隔）<input name="interests" placeholder="美食饗宴,咖啡閒聊"></label><label>自我介紹<textarea name="bio" rows="4"></textarea></label><button class="button button-primary" type="submit">更新資料</button></form>
+      </section>
+      <section id="created-panel" class="tab-panel"><div id="created-list" class="member-list"></div></section>
+      <section id="applied-panel" class="tab-panel"><div id="applied-list" class="member-list"></div></section>
+    </section>
+  </main>
+
+  <div id="auth-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="modal-card"><button id="close-auth" class="modal-close" aria-label="關閉">×</button><div class="auth-tabs"><button class="auth-tab active" data-auth-tab="login-form">登入</button><button class="auth-tab" data-auth-tab="register-form">註冊</button></div>
+      <form id="login-form" class="auth-form active"><h2 id="auth-title">歡迎回來</h2><label>Email<input name="email" type="email" required></label><label>密碼<input name="password" type="password" required></label><button class="button button-primary full" type="submit">登入</button><p class="demo-hint">展示帳號：amy@example.com／password123</p></form>
+      <form id="register-form" class="auth-form"><h2>建立 Jiu-Eat 帳號</h2><label>顯示名稱<input name="display_name" required></label><label>Email<input name="email" type="email" required></label><label>密碼（至少 8 碼）<input name="password" type="password" minlength="8" required></label><label>常用地區<input name="city" placeholder="台北"></label><label>興趣（以逗號分隔）<input name="interests" placeholder="美食饗宴,咖啡閒聊"></label><button class="button button-primary full" type="submit">註冊</button></form>
+    </div>
+  </div>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <footer><strong>© Jiu-Eat</strong><p>一起吃飯，一起認識新朋友。</p></footer>
+</body>
+</html>
