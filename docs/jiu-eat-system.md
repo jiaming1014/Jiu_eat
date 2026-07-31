@@ -165,7 +165,7 @@ MVP 使用 3 張主要資料表即可。
 | `email`         | string   | 登入 Email，不可重複 |
 | `password_hash` | string   | 雜湊後的密碼         |
 | `display_name`  | string   | 顯示名稱             |
-| `city`          | string   | 常用地區             |
+| `city`          | string   | 居住地區             |
 | `interests`     | string   | 興趣，以逗號分隔即可 |
 | `bio`           | string   | 自我介紹，可空白     |
 | `created_at`    | datetime | 建立時間             |
