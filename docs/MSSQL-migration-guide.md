@@ -37,14 +37,14 @@ FastAPI → SQLAlchemy → pyodbc → Microsoft SQL Server
 
 ## 3. 安裝 Microsoft ODBC Driver
 
-應用程式執行主機必須安裝 Microsoft ODBC Driver 18 for SQL Server。
+應用程式執行主機必須安裝 Microsoft ODBC Driver 17 for SQL Server。
 
 ### Windows 檢查方式
 
 在「ODBC 資料來源（64 位元）」的「驅動程式」頁籤確認存在：
 
 ```text
-ODBC Driver 18 for SQL Server
+ODBC Driver 17 for SQL Server
 ```
 
 ### macOS / Linux 檢查方式
@@ -56,10 +56,10 @@ odbcinst -q -d
 應可看到：
 
 ```text
-[ODBC Driver 18 for SQL Server]
+[ODBC Driver 17 for SQL Server]
 ```
 
-若未安裝，請由 Microsoft 官方文件依作業系統安裝 Driver 18。
+若未安裝，請由 Microsoft 官方文件依作業系統安裝 Driver 17。
 
 ## 4. 加入 Python 套件
 
@@ -98,7 +98,7 @@ uv sync
 SQLAlchemy 的 `create_all()` 可以建立資料表，但不會建立 Database。請先由 DBA 或具權限帳號執行：
 
 ```sql
-CREATE DATABASE jiu_eat;
+CREATE DATABASE jiu_eat_1.2;
 GO
 ```
 
@@ -108,17 +108,11 @@ GO
 
 ## 6. 設定 MSSQL 連線
 
-目前 `backend/database.py` 會讀取 `DATABASE_URL`：
+目前的 `backend/database.py` 已使用 `DATABASE_URL`，並預設本機 MSSQL（`localhost:1433/jiu_eat_1.2`、ODBC Driver 17、Windows 整合驗證）：
 
 ```python
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jiu_eat.db")
-connect_args = (
-    {"check_same_thread": False}
-    if DATABASE_URL.startswith("sqlite")
-    else {}
-)
-
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+DATABASE_URL = os.getenv("DATABASE_URL",
+    "mssql+pyodbc://@localhost:1433/jiu_eat_1.2?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes")
 ```
 
 因此不要把真實帳號、密碼直接寫入 Git 中的 Python 程式，應由執行環境提供 `DATABASE_URL`。
@@ -134,13 +128,13 @@ mssql+pyodbc://帳號:密碼@主機:1433/資料庫?driver=ODBC+Driver+18+for+SQL
 macOS / Linux Bash 範例：
 
 ```bash
-export DATABASE_URL='mssql+pyodbc://jiueat_app:Password@db-server:1433/jiu_eat?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes'
+export DATABASE_URL='mssql+pyodbc://jiueat_app:Password@db-server:1433/jiu_eat_1.2?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes'
 ```
 
 Windows PowerShell 範例：
 
 ```powershell
-$env:DATABASE_URL = 'mssql+pyodbc://jiueat_app:Password@db-server:1433/jiu_eat?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes'
+$env:DATABASE_URL = 'mssql+pyodbc://jiueat_app:Password@db-server:1433/jiu_eat_1.2?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes'
 ```
 
 密碼若包含 `@`、`:`、`/`、`#`、`%` 等 URL 特殊字元，必須先做 URL encoding。為避免此問題，可採用本文件第 7 節的 `URL.create()` 寫法。
@@ -150,7 +144,7 @@ $env:DATABASE_URL = 'mssql+pyodbc://jiueat_app:Password@db-server:1433/jiu_eat?d
 若應用程式和 SQL Server 位於公司 Windows／網域環境，而且 DBA 指定使用 Windows 驗證，可使用 ODBC connection string：
 
 ```powershell
-$env:DATABASE_URL = 'mssql+pyodbc:///?odbc_connect=DRIVER%3DODBC%20Driver%2018%20for%20SQL%20Server%3BSERVER%3Ddb-server%3BDATABASE%3Djiu_eat%3BTrusted_Connection%3Dyes%3BTrustServerCertificate%3Dyes'
+$env:DATABASE_URL = 'mssql+pyodbc:///?odbc_connect=DRIVER%3DODBC%20Driver%2017%20for%20SQL%20Server%3BSERVER%3Ddb-server%3BDATABASE%3Djiu_eat_1.2%3BTrusted_Connection%3Dyes%3BTrustServerCertificate%3Dyes'
 ```
 
 Windows 驗證能否使用，取決於服務執行帳號、網域和 SQL Server 權限，需由 DBA 或系統管理者確認。
@@ -183,7 +177,7 @@ if DB_TYPE == "mssql":
         query={
             "driver": os.getenv(
                 "DB_DRIVER",
-                "ODBC Driver 18 for SQL Server",
+                "ODBC Driver 17 for SQL Server",
             ),
             "TrustServerCertificate": os.getenv(
                 "DB_TRUST_SERVER_CERTIFICATE",
@@ -225,10 +219,10 @@ def get_db():
 export DB_TYPE='mssql'
 export DB_HOST='db-server'
 export DB_PORT='1433'
-export DB_NAME='jiu_eat'
+export DB_NAME='jiu_eat_1.2'
 export DB_USERNAME='jiueat_app'
 export DB_PASSWORD='實際密碼'
-export DB_DRIVER='ODBC Driver 18 for SQL Server'
+export DB_DRIVER='ODBC Driver 17 for SQL Server'
 export DB_TRUST_SERVER_CERTIFICATE='yes'
 ```
 
@@ -259,7 +253,7 @@ uv run uvicorn backend.main:app --reload
 再使用 API 新增會員或活動，並至 MSSQL 查詢資料：
 
 ```sql
-USE jiu_eat;
+USE jiu_eat_1.2;
 GO
 
 SELECT * FROM members;
@@ -319,10 +313,10 @@ uv sync
 ### 找不到 ODBC Driver
 
 ```text
-Can't open lib 'ODBC Driver 18 for SQL Server'
+Can't open lib 'ODBC Driver 17 for SQL Server'
 ```
 
-處理：確認主機已安裝 Driver 18，且 `DB_DRIVER`／連線字串名稱與 `odbcinst -q -d` 顯示完全一致。
+處理：確認主機已安裝 Driver 17，且 `DB_DRIVER`／連線字串名稱與 `odbcinst -q -d` 顯示完全一致。
 
 ### 登入失敗
 
@@ -342,7 +336,7 @@ Login failed for user
 
 ## 13. 交接確認清單
 
-- [ ] 執行主機已安裝 ODBC Driver 18 for SQL Server
+- [ ] 執行主機已安裝 ODBC Driver 17 for SQL Server
 - [ ] `pyodbc` 已加入相依套件並完成 `uv sync`
 - [ ] MSSQL Database 已建立
 - [ ] 應用程式帳號及最小必要權限已設定
@@ -361,7 +355,7 @@ Login failed for user
 ```bash
 uv add pyodbc
 
-export DATABASE_URL='mssql+pyodbc://帳號:密碼@主機:1433/jiu_eat?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes'
+export DATABASE_URL='mssql+pyodbc://帳號:密碼@主機:1433/jiu_eat_1.2?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes'
 
 uv run python -c "from backend.database import engine; c = engine.connect(); print('MSSQL connection successful'); c.close()"
 

@@ -59,8 +59,7 @@
 | --------------- | -------------------------- | -------------------------------------------- |
 | 網站前端        | HTML、CSS、原生 JavaScript | 延續目前已完成的 `index.html`                |
 | 後端            | Python + FastAPI           | 提供前端可呼叫的 API；可沿用現有 `main.py`   |
-| Python 展示介面 | Gradio（選用）             | 可用來展示推薦結果或測試資料，不取代主要網站 |
-| 本機資料庫      | mySQL                      | 不需安裝資料庫伺服器，適合作業開發           |
+| 資料庫          | MSSQL（SQL Server）        | 本機 `localhost:1433/jiu_eat_1.2`            |
 | 雲端資料庫      | PostgreSQL 或其他免費      | 第二階段再更換，連線資料使用環境變數         |
 | 前後端串接      | JavaScript Fast API + JSON | HTML 網頁呼叫 Python API                     |
 | 版本管理        | Git / GitHub（選用）       | 方便兩位組員整合程式                         |
@@ -80,17 +79,16 @@ Gradio 適合快速建立 Python Demo，但目前已經有 HTML 首頁，而且�
 ```mermaid
 flowchart LR
     A[HTML / CSS / JavaScript] -->|Fetch API| B[Python FastAPI]
-    B --> C[(mySQL 本機資料庫)]
-    B --> D[簡單推薦規則]
-    E[Gradio 選用展示] --> D
-    C -. 後續更換 .-> F[(免費雲端資料庫)]
+    B --> C[(MSSQL jiu_eat_1.2)]
+    B --> D[FP-Growth 推薦規則]
+    C -. 可改用其他資料庫 .-> F[(免費雲端資料庫)]
 ```
 
 ### 5.1 資料流
 
 1. 使用者在 HTML 頁面操作。
 2. JavaScript 使用 `fetch()` 呼叫 FastAPI。
-3. FastAPI 驗證資料並讀寫 SQLite。
+3. FastAPI 驗證資料並讀寫 MSSQL。
 4. 後端以 JSON 回傳結果。
 5. JavaScript 將結果顯示在網頁上。
 
@@ -165,8 +163,14 @@ MVP 使用 3 張主要資料表即可。
 | `email`         | string   | 登入 Email，不可重複 |
 | `password_hash` | string   | 雜湊後的密碼         |
 | `display_name`  | string   | 顯示名稱             |
-| `city`          | string   | 居住地區             |
-| `interests`     | string   | 興趣，以逗號分隔即可 |
+| `gender`        | string   | 性別（男/女/其他）   |
+| `age`           | string   | 年齡（字串儲存）     |
+| `zodiac`        | string   | 星座                 |
+| `occupation`    | string   | 職業                 |
+| `city`          | string   | 居住縣市             |
+| `district`      | string   | 居住區域             |
+| `interests`     | string   | 興趣，以逗號分隔     |
+| `preferred_cuisine` | string | 偏好料理，逗號分隔 |
 | `bio`           | string   | 自我介紹，可空白     |
 | `created_at`    | datetime | 建立時間             |
 
@@ -263,10 +267,18 @@ erDiagram
 
 ### 11.1 共用 API 設定
 
-在 `frontend/js/api.js` 集中設定後端網址：
+API 呼叫統一於 `frontend/js/app.js` 的 `api()` 函式封裝（前端與後端同源，因此 `API_BASE` 為空字串），錯誤時擷取後端 `detail` 顯示。示意：
 
 ```javascript
-const API_BASE_URL = "http://127.0.0.1:8000";
+async function api(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.detail || "操作失敗");
+  return data;
+}
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -310,6 +322,8 @@ sessionStorage.setItem("displayName", result.display_name);
 
 此方式適合課堂展示，但不是正式網站的完整安全登入機制。密碼在資料庫內仍不可明文儲存，必須儲存雜湊值。
 
+> **已知限制**：權限控制完全依賴前端傳入的 `member_id`（存於 sessionStorage），後端信任該值。任何持有他人 `member_id` 的人都能呼叫 API 修改／刪除他人活動或審核他人申請。此為作業簡化版設計，僅供課堂展示；若正式公開使用，必須改為後端 Session 或 Token 驗證，並由後端判定登入者身份。
+
 若未來要正式公開使用，再改成 Session 或 Token 驗證。
 
 ---
@@ -342,15 +356,16 @@ flowchart TD
 
 ---
 
-## 14. 簡單推薦功能
+## 14. 推薦功能（FP-Growth 關聯規則）
 
-第一版不使用 AI 或機器學習，使用容易說明的加分規則：
+推薦系統使用 `ml/train.py` 依資料庫 `members_fake` 以 **FP-Growth** 訓練「會員特徵（興趣／居住縣市）→ 活動分類」的關聯規則（升幅 lift >= 1），產出 `FP_RULES` 供 `recommend()` 計分（實作於 `backend/services/recommendation_service.py`）。評分權重：
 
 | 條件                   | 分數 |
 | ---------------------- | ---: |
-| 活動分類符合會員興趣   |  +50 |
-| 活動地區與會員城市相同 |  +30 |
-| 活動仍可報名           |  +20 |
+| 基礎分（仍可報名）     |  20  |
+| 每命中一項會員興趣規則 | +60 × confidence |
+| 命中居住縣市規則       | +40 × confidence |
+| 活動位於會員居住縣市   |  +30 |
 
 計算後依總分由高到低排列，並排除：
 
@@ -358,9 +373,7 @@ flowchart TD
 - 使用者自己建立的活動
 - 使用者已經申請的活動
 
-推薦結果可顯示原因，例如「符合你的咖啡興趣」或「活動位於台北」。
-
-Gradio 可用下拉選單選擇會員，再顯示推薦活動與分數，作為推薦功能的展示頁。
+推薦結果依命中規則顯示原因，例如「你的興趣『咖啡』與『咖啡閒聊』高度相關」或「活動就在你的居住縣市」。
 
 ---
 
@@ -372,6 +385,8 @@ Gradio 可用下拉選單選擇會員，再顯示推薦活動與分數，作為�
 - Email 不可重複
 - 密碼至少 8 碼
 - 顯示名稱不可空白
+
+> 性別、偏好料理等個人資料於註冊時不需填寫，帳號建立後可在「個人資料」中補填。個人資料送出時，性別需為 男/女/其他之一，興趣若有勾選至少 3 項。
 
 ### 15.2 活動
 
@@ -397,7 +412,7 @@ Gradio 可用下拉選單選擇會員，再顯示推薦活動與分數，作為�
 | 階段 | 工作內容                                 | 完成判斷               |
 | ---- | ---------------------------------------- | ---------------------- |
 | 1    | 整理現有前端與後端、統一名稱為 Jiu-Eat   | 程式可在本機啟動       |
-| 2    | 將後端資料庫改為 SQLite，建立 3 張資料表 | 可新增及查詢測試資料   |
+| 2    | 建立 MSSQL 資料庫與 3 張資料表          | 可新增及查詢測試資料   |
 | 3    | 完成活動列表與詳情 API                   | 瀏覽器可看到 API JSON  |
 | 4    | 將首頁假資料改成 Fetch API               | 首頁顯示資料庫活動     |
 | 5    | 完成註冊與簡化登入                       | 登入後可取得會員 ID    |
@@ -418,7 +433,7 @@ Gradio 可用下拉選單選擇會員，再顯示推薦活動與分數，作為�
 | 組員     | 主要工作                                      |
 | -------- | --------------------------------------------- |
 | 前端組員 | HTML 頁面、CSS、表單、Fetch API、活動卡片顯示 |
-| 後端組員 | FastAPI、SQLite、資料表、CRUD、驗證、推薦規則 |
+| 後端組員 | FastAPI、MSSQL、資料表、CRUD、驗證、推薦規則 |
 | 共同工作 | 確認 JSON 欄位、整合測試、修正錯誤、作業簡報  |
 
 每完成一支 API，前後端就立即串接測試，不要等所有頁面完成後才一次整合。
@@ -430,7 +445,7 @@ Gradio 可用下拉選單選擇會員，再顯示推薦活動與分數，作為�
 ### 18.1 本機開發
 
 ```env
-DATABASE_URL=sqlite:///./jiu_eat.db
+DATABASE_URL=mssql+pyodbc://@localhost:1433/jiu_eat_1.2?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes
 ```
 
 ### 18.2 後續雲端部署
@@ -439,7 +454,7 @@ DATABASE_URL=sqlite:///./jiu_eat.db
 DATABASE_URL=雲端資料庫提供的連線字串
 ```
 
-Python 程式只讀取 `DATABASE_URL`，不要把帳號或密碼直接寫在程式碼中。若使用 SQLAlchemy，從 SQLite 改成 PostgreSQL 時可保留大部分資料模型與 CRUD 程式。
+Python 程式只讀取 `DATABASE_URL`，不要把帳號或密碼直接寫在程式碼中。若使用 SQLAlchemy，從 MSSQL 改成其他資料庫時可保留大部分資料模型與 CRUD 程式。
 
 ---
 
@@ -465,7 +480,7 @@ Jiu-Eat 學生作業完成時，應具備：
 
 1. HTML、CSS、JavaScript 製作的可操作網頁。
 2. Python FastAPI 後端與 API 文件。
-3. SQLite 本機資料庫及測試資料。
+3. MSSQL 本機資料庫及測試資料。
 4. 會員、活動、申請三項主要功能。
 5. 可完整展示建立、申請及審核流程。
 6. 至少一個使用規則計算的推薦功能。

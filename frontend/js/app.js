@@ -1,14 +1,25 @@
 /**
  * Jiu-Eat 前端應用程式
- * 功能：活動列表、搜尋篩選、會員中心、認證（登入/註冊）
+ * ==============================
+ * 單頁應用程式（SPA）的主邏輯，功能包括：
+ *  - 活動列表與搜尋、分類、城市篩選
+ *  - 活動詳細頁（申請參加 / 發起人審核 / 編輯刪除）
+ *  - 會員中心（個人資料、我建立的、我的申請）
+ *  - 認證（登入 / 註冊 / 登出，使用 sessionStorage 保存狀態）
+ *
+ * 流程概覽：
+ *  1. 頁面載入後依 location.hash 呼叫 route() 切換頁面
+ *  2. 所有 API 呼叫皆透過 api() 函式統一處理錯誤
+ *  3. 所有按鈕點擊事件使用「事件委派」統一在 document 上處理
  */
 
 // ── 全域設定與狀態 ──────────────────────────────────────
 
-const API_BASE = "";                                          // API 基礎路徑（同源）
-const state = { activities: [], visible: 8, currentActivity: null };  // 全域狀態
-const $ = (selector) => document.querySelector(selector);     // 單一元素選擇器
-const $$ = (selector) => [...document.querySelectorAll(selector)];    // 多元素選擇器（轉陣列）
+const API_BASE = "";                                          // API 基礎路徑（同源，因此為空字串）
+const state = { activities: [], visible: 8, currentActivity: null };  // 全域狀態（活動列表、顯示數量、目前檢視的活動）
+const $ = (selector) => document.querySelector(selector);     // 單一元素選擇器簡寫
+const $$ = (selector) => [...document.querySelectorAll(selector)];    // 多元素選擇器（展開為陣列）
+// 從 sessionStorage 讀取目前登入的會員編號；未登入或發生例外時回傳 null
 const memberId = () => { try { const val = sessionStorage.getItem("memberId"); return val ? Number(val) : null; } catch { return null; } };
 
 
@@ -47,9 +58,15 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("zh-TW", { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Taipei" }).format(new Date(value.endsWith("Z") || value.includes("+") ? value : value + "+08:00"));
 }
 
+function parseTaipei(value) {
+  /** 解析後端回傳時間：無時區資訊的分數視為台北時間（UTC+8），避免跨時區誤判 */
+  const s = String(value);
+  return new Date(s.endsWith("Z") || s.includes("+") ? s : s + "+08:00");
+}
+
 function categoryIcon(category) {
   /** 根據活動分類回傳對應的圖示 */
-  return ({ "美食饗宴": "🍱", "桌遊派對": "🎲", "歡唱 KTV": "🎤", "戶外運動": "⛰️", "咖啡閒聊": "☕" })[category] || "✨";
+  return ({ "美食饗宴": "🍱", "桌遊派對": "🎲", "歡唱KTV": "🎤", "戶外運動": "⛰️", "咖啡閒聊": "☕" })[category] || "✨";
 }
 
 
@@ -136,12 +153,14 @@ async function openDetail(id) {
     state.currentActivity = item;
     const mine = memberId() === item.organizer_id;            // 是否為發起人
     const remaining = Math.max(item.max_participants - item.approved_count, 0);
-    const pastDeadline = new Date(item.deadline) <= new Date();
+    const pastDeadline = parseTaipei(item.deadline) <= new Date();
     const appStatus = item.my_application_status;
     let applyDisabled, applyText;
     const canCancel = appStatus === "pending" || appStatus === "rejected";
-    if (canCancel) {
+    if (appStatus === "pending") {
       applyDisabled = true; applyText = "覆核中";
+    } else if (appStatus === "rejected") {
+      applyDisabled = true; applyText = "已被拒絕";
     } else if (appStatus === "approved") {
       applyDisabled = true; applyText = "成功申請";
     } else if (pastDeadline) {
@@ -274,7 +293,7 @@ document.addEventListener("click", async (event) => {
   // 退出返回（從詳細頁回到首頁）
   if (event.target.matches("[data-exit-activity]")) { location.hash = "#home"; return; }
   // 申請參加活動
-  if (event.target.matches("[data-apply-activity]")) { if (!requireLogin()) return; if (new Date(state.currentActivity.deadline) <= new Date()) { showToast("報名已截止"); return; } const message = prompt("想對發起人說什麼？（可留空）") ?? ""; try { await api(`/api/activities/${state.currentActivity.id}/applications`, { method:"POST", body:JSON.stringify({member_id:memberId(), message}) }); showToast("申請已送出"); openDetail(state.currentActivity.id); } catch(e){ showToast(e.message); } return; }
+  if (event.target.matches("[data-apply-activity]")) { if (!requireLogin()) return; if (parseTaipei(state.currentActivity.deadline) <= new Date()) { showToast("報名已截止"); return; } const message = prompt("想對發起人說什麼？（可留空）") ?? ""; try { await api(`/api/activities/${state.currentActivity.id}/applications`, { method:"POST", body:JSON.stringify({member_id:memberId(), message}) }); showToast("申請已送出"); openDetail(state.currentActivity.id); } catch(e){ showToast(e.message); } return; }
   // 取消報名（從活動詳細頁）
   const cancelActivity = event.target.closest("[data-activity-cancel]"); if (cancelActivity) { if (!confirm("確定取消報名？")) return; try { await api(`/api/applications/${cancelActivity.dataset.activityCancel}/cancel?member_id=${memberId()}`, {method:"PUT"}); showToast("已取消報名"); openDetail(state.currentActivity.id); } catch(e){ showToast(e.message); } return; }
   // 刪除活動（從詳細頁）
@@ -284,7 +303,7 @@ document.addEventListener("click", async (event) => {
   // 核准/拒絕申請
   for (const action of ["approve","reject"]) { const btn=event.target.closest(`[data-${action}-id]`); if(btn){ try{ await api(`/api/applications/${btn.dataset[`${action}Id`]}/${action}?member_id=${memberId()}`,{method:"PUT"}); await reviewApplicants(); showToast("申請狀態已更新"); }catch(e){showToast(e.message)} return; }}
   // 取消申請
-  const cancel=event.target.closest("[data-cancel-id]"); if(cancel){ try{ await api(`/api/applications/${cancel.dataset.cancelId}/cancel?member_id=${memberId()}`,{method:"PUT"}); await loadHome(); showToast("已取消申請"); }catch(e){showToast(e.message)} }
+  const cancel=event.target.closest("[data-cancel-id]"); if(cancel){ try{ await api(`/api/applications/${cancel.dataset.cancelId}/cancel?member_id=${memberId()}`,{method:"PUT"}); await loadMember(); showToast("已取消申請"); }catch(e){showToast(e.message)} }
 });
 
 
@@ -325,10 +344,10 @@ $("#profile-form").addEventListener("submit", async(e)=>{
   const form=e.target;
   // 收集已勾選的興趣（至少 3 項）
   const checkedInterests=[...form.querySelectorAll('input[name="interests"]:checked')].map(cb=>cb.value);
-  if(checkedInterests.length<3){showToast("請至少勾選 3 項興趣");return;}
-  // 收集已勾選的偏好料理（至少 3 項）
+  // 前端驗證：至少勾選 3 項興趣，未達標則中止送出
+  if(checkedInterests.length<3){showToast("請至少選擇 3 項興趣");return;}
+  // 收集已勾選的偏好料理
   const checkedCuisines=[...form.querySelectorAll('input[name="preferred_cuisine"]:checked')].map(cb=>cb.value);
-  if(checkedCuisines.length<3){showToast("請至少勾選 3 項偏好料理");return;}
   // 組裝表單資料並送出
   const fd=new FormData(form);
   fd.set("interests",checkedInterests.join(","));
@@ -353,5 +372,7 @@ $("#activity-form").addEventListener("submit", async(e)=>{
 
 // ── 初始化 ──────────────────────────────────────────────
 
+// 監聽 URL hash 變化（點擊連結或瀏覽器上一頁/下一頁）→ 重新路由
 window.addEventListener("hashchange", route);
+// 頁面載入時：先依登入狀態更新 UI，再依目前 hash 載入對應頁面
 try { updateAuthUi(); route(); } catch (e) { console.error("初始化失敗", e); showToast("頁面載入異常，請重新整理"); }

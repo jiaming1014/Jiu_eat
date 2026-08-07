@@ -3,3 +3,5 @@ __pycache__/
 *.db
 .venv/
 .DS_Store
+srv.log
+srv.err
