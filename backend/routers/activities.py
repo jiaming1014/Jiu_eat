@@ -18,7 +18,7 @@ from sqlalchemy import or_, select                      # OR 條件的 SQL 篩�
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..common import activity_json, activity_or_404, application_json, get_current_member, member_or_404, taipei_now, validate_activity
+from ..common import activity_json, activity_or_404, application_json, get_current_member, get_optional_member, taipei_now, validate_activity, with_row_lock
 from ..database import get_db
 from ..models import Member
 
@@ -51,12 +51,12 @@ def list_activities(keyword: Optional[str] = None, category: Optional[str] = Non
 
 
 @router.get("/{activity_id}", response_model=schemas.Activity)
-def get_activity(activity_id: int, member_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+def get_activity(activity_id: int, current: Optional[Member] = Depends(get_optional_member), db: Session = Depends(get_db)):
     """
     取得單一活動的詳細資料
-    - 可帶 member_id 參數，回應中會額外包含該會員的申請狀態
+    - 若已登入，回應中會額外包含該會員的申請狀態
     """
-    return activity_json(activity_or_404(db, activity_id), member_id=member_id)
+    return activity_json(activity_or_404(db, activity_id), member_id=current.id if current else None)
 
 
 @router.post("", response_model=schemas.Activity, status_code=201)
@@ -91,59 +91,61 @@ def update_activity(activity_id: int, data: schemas.ActivityUpdate, current: Mem
 
 
 @router.delete("/{activity_id}")
-def delete_activity(activity_id: int, member_id: int, db: Session = Depends(get_db)):
+def delete_activity(activity_id: int, current: Member = Depends(get_current_member), db: Session = Depends(get_db)):
     """
     刪除活動：僅限發起人可刪除
-    - 檢查目前登入者是否為發起人（member_id 比對）
+    - 檢查目前登入者是否為發起人（current 身分比對）
     - 非發起人刪除回傳 403
     """
     activity = activity_or_404(db, activity_id)
-    if activity.organizer_id != member_id: raise HTTPException(403, "只有發起人可以刪除活動")
+    if activity.organizer_id != current.id: raise HTTPException(403, "只有發起人可以刪除活動")
     db.delete(activity); db.commit()   # 刪除活動（相關申請會因 cascade 一併刪除）
     return {"message": "活動已刪除"}
 
 
 @router.post("/{activity_id}/applications", response_model=schemas.Application, status_code=201)
-def apply(activity_id: int, data: schemas.ApplicationCreate, db: Session = Depends(get_db)):
+def apply(activity_id: int, data: schemas.ApplicationCreate, current: Member = Depends(get_current_member), db: Session = Depends(get_db)):
     """
     申請參加活動：檢查資格、防止重複申請
     - 不能申請自己建立的活動（400）
     - 活動未開放或已過截止時間不可申請（400）
     - 同一會員已申請過且未取消，不可重複申請（409）
     - 若先前曾取消，重新申請時會恢復為 pending 狀態
+    - 申請人身分由登入憑證（Authorization）決定
     """
-    activity = activity_or_404(db, activity_id); member_or_404(db, data.member_id)
+    activity = activity_or_404(db, activity_id)
     # 不能申請自己建立的活動
-    if activity.organizer_id == data.member_id: raise HTTPException(400, "不能申請自己建立的活動")
+    if activity.organizer_id == current.id: raise HTTPException(400, "不能申請自己建立的活動")
     # 活動已停止報名或已截止
     if activity.status != "open" or activity.deadline <= taipei_now(): raise HTTPException(400, "活動已停止報名")
-    # 以列鎖（with_for_update）串行化報名要求，避免並發同時報名超賣（與核准檢查一致）
-    activity = db.query(models.Activity).filter(models.Activity.id == activity_id).with_for_update().first()
+    # 以列鎖串行化報名要求，避免並發同時報名超賣（與核准檢查一致）
+    # 註：SQL Server 會編譯成 WITH (UPDLOCK)（SQLAlchemy 的 with_for_update() 在 MSSQL 會被靜默忽略）
+    activity = with_row_lock(db.query(models.Activity).filter(models.Activity.id == activity_id), models.Activity).first()
     if activity is None: raise HTTPException(404, "找不到活動")
     # 名額檢查：已核准人數達上限即不可再報名
     approved_count = db.query(models.Application).filter_by(activity_id=activity_id, status="approved").count()
     if approved_count >= activity.max_participants: raise HTTPException(400, "活動名額已滿")
     # 檢查是否已申請過
-    existing = db.query(models.Application).filter_by(activity_id=activity_id, member_id=data.member_id).first()
+    existing = db.query(models.Application).filter_by(activity_id=activity_id, member_id=current.id).first()
     if existing and existing.status != "cancelled": raise HTTPException(409, "你已經申請過這個活動")
     # 若之前已取消，重新申請（更新狀態為 pending，保留原始申請時間）
     if existing:
         existing.status, existing.message = "pending", data.message
         application = existing
     else:
-        application = models.Application(activity_id=activity_id, **data.model_dump()); db.add(application)
+        application = models.Application(activity_id=activity_id, member_id=current.id, **data.model_dump()); db.add(application)
     db.commit(); db.refresh(application)
     return application_json(application)
 
 
 @router.get("/{activity_id}/applications", response_model=List[schemas.Application])
-def applications(activity_id: int, member_id: int, db: Session = Depends(get_db)):
+def applications(activity_id: int, current: Member = Depends(get_current_member), db: Session = Depends(get_db)):
     """
     查看活動的申請列表：僅限發起人可查看
-    - 透過 member_id 比對確認查看者為發起人，否則回傳 403
+    - 透過目前登入身分（current）比對確認查看者為發起人，否則回傳 403
     """
     activity = activity_or_404(db, activity_id)
-    if activity.organizer_id != member_id: raise HTTPException(403, "只有發起人可以查看申請")
+    if activity.organizer_id != current.id: raise HTTPException(403, "只有發起人可以查看申請")
     return [application_json(x) for x in activity.applications]
 
 

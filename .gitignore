@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 srv.log
 srv.err
+srv_8000.log
+srv_8000.err

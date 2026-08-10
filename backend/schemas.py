@@ -159,6 +159,23 @@ class Member(BaseModel):
     created_at: datetime                                  # 註冊時間
 
 
+class MemberPublic(BaseModel):
+    """公開會員資料的 API 回應結構（不含 Email，供檢視他人資料時使用）"""
+    model_config = ConfigDict(from_attributes=True)     # 允許直接從 ORM 物件轉換
+    id: int                                              # 會員編號
+    display_name: str
+    gender: str = ""
+    age: str = ""
+    zodiac: str = ""
+    occupation: str = ""
+    city: str = ""
+    district: str = ""
+    interests: str = ""
+    preferred_cuisine: str = ""
+    bio: str = ""
+    created_at: datetime                                  # 註冊時間
+
+
 # ── 登入回應 ──────────────────────────────────────────────
 class LoginResponse(BaseModel):
     """登入成功後的回應資料結構：回傳會員編號、顯示名稱與登入憑證"""
@@ -188,6 +205,16 @@ class ActivityCreate(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("此欄位不可為空白")
+        return value
+
+    @field_validator("image_url")
+    @classmethod
+    def check_image_url(cls, value: str) -> str:
+        """封面圖片網址：僅允許空字串或 http/https 開頭的網址
+        （同時避免前端以背景圖 url() 注入 CSS/script）"""
+        value = value.strip()
+        if value and not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("封面圖片網址必須以 http:// 或 https:// 開頭")
         return value
 
 

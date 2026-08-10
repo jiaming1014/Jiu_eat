@@ -87,6 +87,19 @@ def get_current_member(authorization: str = Header(default=""), db: Session = De
     return member
 
 
+def get_optional_member(authorization: str = Header(default=""), db: Session = Depends(get_db)):
+    """
+    從 Authorization: Bearer <token> 標頭解析目前登入的會員（可選）
+    - token 無效、未提供或會員不存在時回傳 None（不強制登入）
+    - 供「未登入也可查看、登入後多帶資訊」的端點使用
+    """
+    token = authorization.removeprefix("Bearer ").strip()
+    member_id = get_member_id(token) if token else None
+    if member_id is None:
+        return None
+    return db.get(models.Member, member_id)
+
+
 # ── 資料查詢輔助 ──────────────────────────────────────────
 
 def member_or_404(db: Session, member_id: int):
@@ -111,6 +124,19 @@ def activity_or_404(db: Session, activity_id: int):
     if not activity:
         raise HTTPException(404, "找不到活動")
     return activity
+
+
+def with_row_lock(query, model):
+    """
+    為查詢加上列鎖（row lock），用於串行化並發寫入（報名／核准），避免超賣：
+    - SQL Server 不支援 SELECT ... FOR UPDATE，SQLAlchemy 對其 with_for_update()
+      會「靜默忽略」而不會報錯，等於沒鎖；因此改用 SQL Server 的
+      資料表提示 WITH (UPDLOCK)（搭配 HOLD/單列掃描，鎖定資料列）。
+    - 其他資料庫（PostgreSQL/MySQL/SQLite 等）沿用標準 with_for_update()。
+    """
+    if query.session.get_bind().dialect.name == "mssql":
+        return query.with_hint(model, "WITH (UPDLOCK)", dialect_name="mssql")
+    return query.with_for_update()
 
 
 # ── JSON 轉換 ─────────────────────────────────────────────
