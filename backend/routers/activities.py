@@ -116,12 +116,12 @@ def apply(activity_id: int, data: schemas.ApplicationCreate, current: Member = D
     activity = activity_or_404(db, activity_id)
     # 不能申請自己建立的活動
     if activity.organizer_id == current.id: raise HTTPException(400, "不能申請自己建立的活動")
-    # 活動已停止報名或已截止
-    if activity.status != "open" or activity.deadline <= taipei_now(): raise HTTPException(400, "活動已停止報名")
     # 以列鎖串行化報名要求，避免並發同時報名超賣（與核准檢查一致）
-    # 註：SQL Server 會編譯成 WITH (UPDLOCK)（SQLAlchemy 的 with_for_update() 在 MSSQL 會被靜默忽略）
+    # 註：SQL Server 會編譯成 WITH (UPDLOCK, HOLDLOCK)（SQLAlchemy 的 with_for_update() 在 MSSQL 會被靜默忽略）
     activity = with_row_lock(db.query(models.Activity).filter(models.Activity.id == activity_id), models.Activity).first()
     if activity is None: raise HTTPException(404, "找不到活動")
+    # 活動已停止報名或已截止（於列鎖後再檢查，確保判定以最新狀態為準）
+    if activity.status != "open" or activity.deadline <= taipei_now(): raise HTTPException(400, "活動已停止報名")
     # 名額檢查：已核准人數達上限即不可再報名
     approved_count = db.query(models.Application).filter_by(activity_id=activity_id, status="approved").count()
     if approved_count >= activity.max_participants: raise HTTPException(400, "活動名額已滿")

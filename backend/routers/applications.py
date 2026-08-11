@@ -38,7 +38,7 @@ def change_status(application_id: int, current: models.Member, status: str, db: 
     if application.status == status and status in ("approved", "rejected", "cancelled"):
         raise HTTPException(400, "該申請已是此狀態")
     # 核准時檢查名額：以列鎖串行化核准請求，避免並發同時核准導致超賣
-    # 註：SQL Server 會編譯成 WITH (UPDLOCK)（SQLAlchemy 的 with_for_update() 在 MSSQL 會被靜默忽略）
+    # 註：SQL Server 會編譯成 WITH (UPDLOCK, HOLDLOCK)（SQLAlchemy 的 with_for_update() 在 MSSQL 會被靜默忽略）
     if status == "approved":
         activity = with_row_lock(db.query(models.Activity).filter(models.Activity.id == application.activity_id), models.Activity).first()
         count = db.query(models.Application).filter_by(activity_id=application.activity_id, status="approved").count()

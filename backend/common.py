@@ -131,11 +131,12 @@ def with_row_lock(query, model):
     為查詢加上列鎖（row lock），用於串行化並發寫入（報名／核准），避免超賣：
     - SQL Server 不支援 SELECT ... FOR UPDATE，SQLAlchemy 對其 with_for_update()
       會「靜默忽略」而不會報錯，等於沒鎖；因此改用 SQL Server 的
-      資料表提示 WITH (UPDLOCK)（搭配 HOLD/單列掃描，鎖定資料列）。
+      資料表提示 WITH (UPDLOCK, HOLDLOCK)（搭配單列掃描，鎖定資料列，
+      並將鎖持有到交易結束）。
     - 其他資料庫（PostgreSQL/MySQL/SQLite 等）沿用標準 with_for_update()。
     """
     if query.session.get_bind().dialect.name == "mssql":
-        return query.with_hint(model, "WITH (UPDLOCK)", dialect_name="mssql")
+        return query.with_hint(model, "WITH (UPDLOCK, HOLDLOCK)", dialect_name="mssql")
     return query.with_for_update()
 
 

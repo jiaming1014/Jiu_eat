@@ -103,8 +103,9 @@ async function loadHome() {
       renderCards("#recommendation-grid", recommendations.slice(0, 4));
       $("#recommendation-note").textContent = recommendations.length ? "依你的興趣與居住縣市排序。" : "目前沒有新的推薦活動。";
     } else {
-      // 未登入：顯示第 5~8 筆作為推薦
-      renderCards("#recommendation-grid", activities.slice(4, 8));
+      // 未登入：不顯示推薦活動，僅顯示提示文字
+      renderCards("#recommendation-grid", []);
+      $("#recommendation-note").textContent = "登入後，系統會依你的興趣與地區推薦活動。";
     }
   } catch (error) {
     $("#home-empty").classList.remove("hidden");
