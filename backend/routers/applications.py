@@ -32,6 +32,8 @@ def change_status(application_id: int, current: models.Member, status: str, db: 
     # 權限檢查：取消限本人、審核限發起人（以目前登入身分 current 比對）
     if status == "cancelled":
         if application.member_id != current.id: raise HTTPException(403, "只能取消自己的申請")
+        # 已被拒絕的申請不可再取消報名
+        if application.status == "rejected": raise HTTPException(400, "已被拒絕的申請無法取消")
     elif application.activity.organizer_id != current.id:
         raise HTTPException(403, "只有發起人可以審核")
     # 防呆：申請已是目標狀態時不重複操作

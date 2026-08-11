@@ -161,7 +161,7 @@ async function openDetail(id) {
     const pastDeadline = parseTaipei(item.deadline) <= new Date();
     const appStatus = item.my_application_status;
     let applyDisabled, applyText;
-    const canCancel = appStatus === "pending" || appStatus === "rejected";
+    const canCancel = appStatus === "pending";
     if (appStatus === "pending") {
       applyDisabled = true; applyText = "覆核中";
     } else if (appStatus === "rejected") {
