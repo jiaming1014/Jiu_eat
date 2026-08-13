@@ -89,4 +89,21 @@ class Application(Base):
     member = relationship("Member", back_populates="applications")
 
 
+class Notification(Base):
+    """通知資料表：記錄發給會員的通知（目前用於發起人收到新報名通知）"""
+    __tablename__ = "notifications"                                          # 資料表名稱
+
+    id = Column(Integer, primary_key=True, index=True)                       # 通知編號（主鍵）
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)  # 收件人（活動發起人）
+    activity_id = Column(Integer, ForeignKey("activities.id"), nullable=False)         # 相關活動
+    message = Column(String(500), default="")                                # 通知內容
+    is_read = Column(Integer, default=0)                                     # 是否已讀（0 未讀 / 1 已讀）
+    created_at = Column(DateTime, default=taipei_now)                        # 通知時間（預設為現在）
+
+    # 多對一關聯：通知 → 活動（取得 activity 即為活動物件，用於顯示活動名稱）
+    activity = relationship("Activity")
+    # 多對一關聯：通知 → 會員（取得 member 即為收件人會員物件）
+    member = relationship("Member")
+
+
 

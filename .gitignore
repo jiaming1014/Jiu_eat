@@ -7,3 +7,6 @@ srv.log
 srv.err
 srv_8000.log
 srv_8000.err
+srv_8000.pid
+srv_8000.log.old
+srv_8000.err.old

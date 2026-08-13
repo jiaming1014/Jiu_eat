@@ -185,6 +185,21 @@ def application_json(application: models.Application) -> dict:
     }
 
 
+def notification_json(notification: models.Notification) -> dict:
+    """
+    將 Notification ORM 物件轉換為 API 回應用的 dict
+    - activity_title 透過關聯物件取出活動名稱
+    """
+    return {
+        "id": notification.id, "member_id": notification.member_id,   # 通知編號、收件人編號
+        "activity_id": notification.activity_id,                       # 相關活動編號
+        "activity_title": notification.activity.title,                 # 相關活動名稱
+        "message": notification.message,                               # 通知內容
+        "is_read": notification.is_read,                               # 是否已讀
+        "created_at": notification.created_at,                         # 通知時間
+    }
+
+
 # ── 活動資料驗證 ──────────────────────────────────────────
 
 def validate_activity(data) -> None:

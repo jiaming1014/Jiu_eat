@@ -76,6 +76,15 @@ class MemberRegister(BaseModel):
             raise ValueError("請至少選擇 3 項興趣")
         return ",".join(items)
 
+    @field_validator("preferred_cuisine")
+    @classmethod
+    def check_preferred_cuisine(cls, value: str) -> str:
+        """偏好料理若有填寫，至少需勾選 3 項（與前端需求一致）"""
+        items = [x.strip() for x in value.split(",") if x.strip()]
+        if value.strip() and len(items) < 3:
+            raise ValueError("請至少選擇 3 項偏好料理")
+        return ",".join(items)
+
 
 # ── 登入 ────────────────────────────────────────────────
 class LoginRequest(BaseModel):
@@ -137,6 +146,15 @@ class MemberUpdate(BaseModel):
         items = [x.strip() for x in value.split(",") if x.strip()]
         if value.strip() and len(items) < 3:
             raise ValueError("請至少選擇 3 項興趣")
+        return ",".join(items)
+
+    @field_validator("preferred_cuisine")
+    @classmethod
+    def check_preferred_cuisine(cls, value: str) -> str:
+        """偏好料理若有填寫，至少需勾選 3 項（與前端需求一致）"""
+        items = [x.strip() for x in value.split(",") if x.strip()]
+        if value.strip() and len(items) < 3:
+            raise ValueError("請至少選擇 3 項偏好料理")
         return ",".join(items)
 
 
@@ -265,6 +283,19 @@ class Application(BaseModel):
     message: str
     status: str
     created_at: datetime
+
+
+# ── 通知回應 ──────────────────────────────────────────────
+class Notification(BaseModel):
+    """通知資料的 API 回應結構：回傳一筆通知的資料給前端"""
+    model_config = ConfigDict(from_attributes=True)      # 允許直接從 ORM 物件轉換
+    id: int                                              # 通知編號
+    member_id: int                                       # 收件人編號
+    activity_id: int                                     # 相關活動編號
+    activity_title: str = ""                             # 相關活動名稱
+    message: str                                         # 通知內容
+    is_read: int                                         # 是否已讀（0 未讀 / 1 已讀）
+    created_at: datetime                                 # 通知時間
 
 
 # ── 推薦回應 ──────────────────────────────────────────────

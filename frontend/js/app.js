@@ -74,6 +74,49 @@ function categoryIcon(category) {
 }
 
 
+// ── 通知 ────────────────────────────────────────────────
+
+function updateNotificationBadge(count) {
+  /** 更新鈴鐺圖示上的未讀數量徽章 */
+  const badge = $("#notification-badge");
+  badge.classList.toggle("hidden", !count);
+  badge.textContent = count > 99 ? "99+" : count;
+}
+
+async function loadUnreadCount() {
+  /** 取得目前會員的未讀通知數量並更新鈴鐺徽章 */
+  if (!memberId()) return;
+  try { const data = await api("/api/notifications/unread-count"); updateNotificationBadge(data.count); } catch { /* 連線失敗時忽略 */ }
+}
+
+async function loadNotifications() {
+  /** 載入未讀通知列表並渲染到通知面板（已讀通知不顯示） */
+  const list = $("#notification-list");
+  try {
+    const items = await api("/api/notifications");
+    const unread = items.filter((n) => !n.is_read);          // 只顯示未讀通知
+    updateNotificationBadge(unread.length);
+    list.innerHTML = unread.length ? unread.map((n) => `<div class="notification-item" data-notification-id="${n.id}" data-activity-id="${n.activity_id}"><div class="notification-message">${escapeHtml(n.message)}</div><div class="notification-meta">${formatDate(n.created_at)}・${escapeHtml(n.activity_title)}</div></div>`).join("") : `<p class="notification-empty">目前沒有通知。</p>`;
+  } catch (error) { showToast(error.message); }
+}
+
+async function markNotificationRead(id) {
+  /** 將單筆通知標記為已讀，並從通知面板移除 */
+  try { await api(`/api/notifications/${id}/read`, { method: "PUT" }); } catch { /* 忽略 */ }
+  document.querySelector(`[data-notification-id="${id}"]`)?.remove();
+  const list = $("#notification-list");
+  if (!list.querySelector(".notification-item")) list.innerHTML = `<p class="notification-empty">目前沒有通知。</p>`;
+  loadUnreadCount();
+}
+
+async function toggleNotificationPanel() {
+  /** 切換通知面板開關：開啟時載入最新通知 */
+  const panel = $("#notification-panel");
+  if (panel.classList.contains("hidden")) { panel.classList.remove("hidden"); await loadNotifications(); }
+  else panel.classList.add("hidden");
+}
+
+
 // ── 活動卡片渲染 ────────────────────────────────────────
 
 function cardHtml(item) {
@@ -105,7 +148,7 @@ async function loadHome() {
     } else {
       // 未登入：不顯示推薦活動，僅顯示提示文字
       renderCards("#recommendation-grid", []);
-      $("#recommendation-note").textContent = "登入後，系統會依你的興趣與地區推薦活動。";
+      $("#recommendation-note").textContent = "登入後，系統會依你的興趣與居住縣市推薦活動。";
     }
   } catch (error) {
     $("#home-empty").classList.remove("hidden");
@@ -192,6 +235,7 @@ function showPage(name) {
   $$(".page").forEach((page) => page.classList.remove("active"));
   $(`#${name}-page`)?.classList.add("active");
   $("#main-nav").classList.remove("open");                   // 關閉導覽選單
+  $("#notification-panel").classList.add("hidden");          // 切頁時關閉通知面板
   window.scrollTo(0, 0);                                     // 捲動到頂部
 }
 
@@ -230,6 +274,10 @@ function updateAuthUi() {
   const loggedIn = Boolean(memberId());
   $$(".member-only").forEach((item) => item.classList.toggle("hidden", !loggedIn));
   $("#auth-button").textContent = loggedIn ? `登出 ${sessionStorage.getItem("displayName") || ""}` : "登入／註冊";
+  if (!loggedIn) {                                             // 登出後清除通知徽章與面板
+    $("#notification-badge").classList.add("hidden");
+    $("#notification-panel").classList.add("hidden");
+  }
 }
 
 
@@ -285,6 +333,9 @@ async function reviewApplicants() {
 // ── 全域點擊事件處理（事件委派）─────────────────────────
 
 document.addEventListener("click", async (event) => {
+  // 點擊通知項目 → 標記已讀並前往該活動詳情
+  const notifItem = event.target.closest("[data-notification-id]");
+  if (notifItem) { markNotificationRead(Number(notifItem.dataset.notificationId)); location.hash = `#activity/${notifItem.dataset.activityId}`; return; }
   // 點擊活動卡片 → 開啟詳細頁
   const activityButton = event.target.closest("[data-activity-id]"); if (activityButton) return openDetail(Number(activityButton.dataset.activityId));
   // 返回首頁
@@ -320,6 +371,15 @@ $("#auth-button").addEventListener("click", async () => { if(memberId()){ try { 
 $("#create-button").addEventListener("click", () => { if(requireLogin()) location.hash="#create"; });
 // 表單選單開關
 $("#menu-button").addEventListener("click", () => $("#main-nav").classList.toggle("open"));
+// 通知鈴鐺：切換通知面板
+$("#notification-bell").addEventListener("click", toggleNotificationPanel);
+// 全部標記已讀
+$("#notification-read-all").addEventListener("click", async () => { try { await api("/api/notifications/read-all", { method: "PUT" }); await loadNotifications(); showToast("已全部標記為已讀"); } catch (e) { showToast(e.message); } });
+// 點擊面板外區域時關閉通知面板
+document.addEventListener("click", (event) => {
+  const panel = $("#notification-panel");
+  if (!panel.classList.contains("hidden") && !event.target.closest("#notification-bell") && !event.target.closest("#notification-panel")) panel.classList.add("hidden");
+});
 // 關閉認證視窗
 $("#close-auth").addEventListener("click", closeAuth);
 // 點擊遮罩關閉認證視窗
@@ -328,9 +388,9 @@ $("#auth-modal").addEventListener("click", (e) => { if(e.target.id === "auth-mod
 $$(".auth-tab").forEach((tab) => tab.addEventListener("click", () => switchAuthTab(tab.dataset.authTab)));
 
 // 登入表單送出
-$("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const form=new FormData(e.target); try{const data=await api("/api/login",{method:"POST",body:JSON.stringify(Object.fromEntries(form))}); sessionStorage.setItem("memberId",data.member_id);sessionStorage.setItem("displayName",data.display_name);sessionStorage.setItem("token",data.token);updateAuthUi();closeAuth();loadHome();showToast("登入成功");}catch(error){showToast(error.message)} });
+$("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const form=new FormData(e.target); try{const data=await api("/api/login",{method:"POST",body:JSON.stringify(Object.fromEntries(form))}); sessionStorage.setItem("memberId",data.member_id);sessionStorage.setItem("displayName",data.display_name);sessionStorage.setItem("token",data.token);updateAuthUi();loadUnreadCount();closeAuth();loadHome();showToast("登入成功");}catch(error){showToast(error.message)} });
 // 註冊表單送出
-$("#register-form").addEventListener("submit", async (e) => { e.preventDefault(); const payload=Object.fromEntries(new FormData(e.target)); try{await api("/api/register",{method:"POST",body:JSON.stringify(payload)});showToast("註冊成功，請登入");switchAuthTab("login-form");$("#login-form").elements.email.value=payload.email;}catch(error){showToast(error.message)} });
+$("#register-form").addEventListener("submit", async (e) => { e.preventDefault(); const btn = e.target.querySelector('button[type="submit"]'); if (btn.disabled) return; btn.disabled = true; const payload=Object.fromEntries(new FormData(e.target)); try{await api("/api/register",{method:"POST",body:JSON.stringify(payload)});showToast("註冊成功，請登入");switchAuthTab("login-form");$("#login-form").elements.email.value=payload.email;$("#login-form").elements.password.value="";}catch(error){showToast(error.message)} finally{btn.disabled=false;} });
 
 // 首頁搜尋表單
 $("#home-search-form").addEventListener("submit", (e) => { e.preventDefault(); $("#filter-keyword").value=$("#home-keyword").value; location.hash="#activities"; });
@@ -379,5 +439,7 @@ $("#activity-form").addEventListener("submit", async(e)=>{
 
 // 監聽 URL hash 變化（點擊連結或瀏覽器上一頁/下一頁）→ 重新路由
 window.addEventListener("hashchange", route);
+// 已登入時每 30 秒輪詢未讀通知數量，更新鈴鐺徽章
+setInterval(() => { if (memberId()) loadUnreadCount(); }, 30000);
 // 頁面載入時：先依登入狀態更新 UI，再依目前 hash 載入對應頁面
-try { updateAuthUi(); route(); } catch (e) { console.error("初始化失敗", e); showToast("頁面載入異常，請重新整理"); }
+try { updateAuthUi(); loadUnreadCount(); route(); } catch (e) { console.error("初始化失敗", e); showToast("頁面載入異常，請重新整理"); }

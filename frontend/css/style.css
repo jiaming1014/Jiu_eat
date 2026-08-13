@@ -131,7 +131,17 @@ a {
     display: none;                   /* 桌面版隱藏，行動版顯示（見下方 media query） */
     border: 0;
     background: transparent;
-    font-size: 25px
+    font-size: 25px;
+    line-height: 1;
+    padding: 4px;
+    align-items: center;
+    justify-content: center
+}
+
+.header-actions {
+    display: flex;                   /* 右側群組：通知鈴鐺 + 漢堡選單 + 導覽列 */
+    align-items: center;
+    gap: 14px
 }
 
 /* ── 4. 按鈕 ─────────────────────────────────────────── */
@@ -700,6 +710,126 @@ a {
     text-align: center
 }
 
+/* ── 14.5 通知鈴鐺與面板 ─────────────────────────────── */
+.notification-bell {
+    position: relative;                       /* 徽章以絕對定位疊在鈴鐺右上角 */
+    border: 0;
+    background: #ffeadf;                      /* 淺橘圓形底，讓鈴鐺更清楚 */
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--orange);                     /* 鈴鐺圖示使用品牌橘色 */
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background .2s
+}
+
+.notification-bell:hover {
+    background: #ffddca
+}
+
+.bell-icon {
+    width: 22px;
+    height: 22px;
+    display: block;
+    flex-shrink: 0
+}
+
+.notification-badge {
+    position: absolute;
+    top: -3px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 99px;
+    background: var(--ink);                   /* 深色徽章，與橘底區分 */
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    line-height: 1
+}
+
+.notification-panel {
+    position: fixed;
+    top: 80px;
+    right: max(5vw, 24px);
+    z-index: 45;
+    width: min(360px, calc(100vw - 28px));
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+    overflow: hidden
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 800
+}
+
+.notification-read-all {
+    border: 0;
+    background: transparent;
+    color: var(--orange);
+    font-size: 13px;
+    font-weight: 800
+}
+
+.notification-list {
+    max-height: 380px;
+    overflow-y: auto;
+    display: grid
+}
+
+.notification-item {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1ece7;
+    cursor: pointer;
+    text-align: left
+}
+
+.notification-item:hover {
+    background: var(--cream)
+}
+
+.notification-item.unread {
+    background: #fff6ef
+}
+
+.notification-item.unread .notification-message {
+    color: var(--ink);
+    font-weight: 800
+}
+
+.notification-message {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--muted)
+}
+
+.notification-meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px
+}
+
+.notification-empty {
+    padding: 30px 16px;
+    text-align: center;
+    color: var(--muted)
+}
+
 /* ── 15. Toast 與頁尾 ─────────────────────────────────── */
 .toast {
     position: fixed;
@@ -768,7 +898,7 @@ footer p {
     }
 
     .menu-button {
-        display: block                        /* 顯示漢堡選單按鈕 */
+        display: flex                 /* 顯示漢堡選單按鈕（flex 垂直置中，與鈴鐺對齊） */
     }
 
     .main-nav {

@@ -45,6 +45,14 @@ def change_status(application_id: int, current: models.Member, status: str, db: 
         activity = with_row_lock(db.query(models.Activity).filter(models.Activity.id == application.activity_id), models.Activity).first()
         count = db.query(models.Application).filter_by(activity_id=application.activity_id, status="approved").count()
         if count >= activity.max_participants: raise HTTPException(400, "活動名額已滿")
+    # 發起人審核（核准/拒絕）後，建立通知給申請人，告知審核結果
+    if status in ("approved", "rejected"):
+        verb = "核准" if status == "approved" else "拒絕"
+        db.add(models.Notification(
+            member_id=application.member_id,
+            activity_id=application.activity_id,
+            message=f"{application.activity.organizer.display_name} 已{verb}你報名「{application.activity.title}」",
+        ))
     application.status = status; db.commit(); db.refresh(application)   # 更新狀態並儲存
     return application_json(application)
 

@@ -99,6 +99,7 @@ def delete_activity(activity_id: int, current: Member = Depends(get_current_memb
     """
     activity = activity_or_404(db, activity_id)
     if activity.organizer_id != current.id: raise HTTPException(403, "只有發起人可以刪除活動")
+    db.query(models.Notification).filter_by(activity_id=activity_id).delete(synchronize_session=False)   # 先清除參照此活動的通知，避免外鍵約束阻擋刪除
     db.delete(activity); db.commit()   # 刪除活動（相關申請會因 cascade 一併刪除）
     return {"message": "活動已刪除"}
 
@@ -134,6 +135,12 @@ def apply(activity_id: int, data: schemas.ApplicationCreate, current: Member = D
         application = existing
     else:
         application = models.Application(activity_id=activity_id, member_id=current.id, **data.model_dump()); db.add(application)
+        # 建立通知給活動發起人：僅「首次申請」才通知，避免取消後重複報名造成重複通知洗版
+        db.add(models.Notification(
+            member_id=activity.organizer_id,
+            activity_id=activity.id,
+            message=f"{current.display_name} 報名了你的活動「{activity.title}」",
+        ))
     db.commit(); db.refresh(application)
     return application_json(application)
 
